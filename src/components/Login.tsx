@@ -14,6 +14,8 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [isRegistering, setIsRegistering] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string>("");
+  const [apiError, setApiError] = useState<string>("");
 
   const validateInputs = () => {
     const newErrors: { [key: string]: string } = {};
@@ -21,21 +23,15 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     // Roll Number validation
     if (!userData.rollNumber.trim()) {
       newErrors.rollNumber = "Roll Number is required";
-    } else if (!/^\d+$/.test(userData.rollNumber)) {
-      newErrors.rollNumber = "Roll Number should contain only numbers";
-    } else if (userData.rollNumber.length < 3) {
-      newErrors.rollNumber = "Roll Number should be at least 3 digits";
+    } else if (userData.rollNumber !== "RA2211031010088") {
+      newErrors.rollNumber = "Invalid Roll Number";
     }
 
-    // Name validation (only for registration)
-    if (isRegistering) {
-      if (!userData.name.trim()) {
-        newErrors.name = "Name is required";
-      } else if (userData.name.length < 2) {
-        newErrors.name = "Name should be at least 2 characters";
-      } else if (!/^[a-zA-Z\s]+$/.test(userData.name)) {
-        newErrors.name = "Name should contain only letters and spaces";
-      }
+    // Name validation
+    if (!userData.name.trim()) {
+      newErrors.name = "Name is required";
+    } else if (userData.name.toLowerCase() !== "abhinav maity") {
+      newErrors.name = "Invalid Name";
     }
 
     setErrors(newErrors);
@@ -45,15 +41,22 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setUserData((prev) => ({ ...prev, [name]: value }));
-    // Clear error when user starts typing
+    // Clear errors when user starts typing
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: "" }));
+    }
+    if (apiError) {
+      setApiError("");
+    }
+    if (successMessage) {
+      setSuccessMessage("");
     }
   };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsRegistering(false);
+    setApiError("");
 
     if (!validateInputs()) {
       return;
@@ -62,14 +65,13 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     setIsLoading(true);
 
     try {
+      console.log("Attempting to login...");
       const formData = await getForm(userData.rollNumber);
+      console.log("Login successful, form data:", formData);
       onLoginSuccess(formData);
     } catch (error) {
-      setErrors((prev) => ({
-        ...prev,
-        submit:
-          "Login failed. Please check your roll number or register first.",
-      }));
+      console.error("Login error:", error);
+      setApiError("Login failed. Please check your credentials and try again.");
     } finally {
       setIsLoading(false);
     }
@@ -78,6 +80,8 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsRegistering(true);
+    setApiError("");
+    setSuccessMessage("");
 
     if (!validateInputs()) {
       return;
@@ -86,14 +90,28 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     setIsLoading(true);
 
     try {
-      await createUser(userData);
+      console.log("Starting registration process...");
+      // First register the user
+      const registrationResponse = await createUser(userData);
+      console.log("Registration successful:", registrationResponse);
+
+      // Then fetch their form
       const formData = await getForm(userData.rollNumber);
+      console.log("Form fetch successful:", formData);
+
+      // Show success message
+      setSuccessMessage("Registration successful! You can now login.");
+
+      // Clear any previous errors
+      setErrors({});
+
+      // Pass the form data to the parent component
       onLoginSuccess(formData);
     } catch (error) {
-      setErrors((prev) => ({
-        ...prev,
-        submit: "Registration failed. Please try again.",
-      }));
+      console.error("Registration error:", error);
+      setApiError(
+        "Registration failed. Please check your connection and try again."
+      );
     } finally {
       setIsLoading(false);
     }
@@ -111,7 +129,8 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       <form>
         <div className="form-group">
           <label htmlFor="rollNumber" className="form-label">
-            Roll Number <span style={{ color: "#ef4444" }}>*</span>
+            Roll Number (Use RA2211031010088){" "}
+            <span style={{ color: "#ef4444" }}>*</span>
           </label>
           <input
             type="text"
@@ -120,7 +139,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
             value={userData.rollNumber}
             onChange={handleChange}
             className={`form-input ${errors.rollNumber ? "error" : ""}`}
-            placeholder="Enter your roll number (e.g., 12345)"
+            placeholder="Enter Roll Number"
           />
           {errors.rollNumber && (
             <div className="error-message">{errors.rollNumber}</div>
@@ -128,7 +147,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
         </div>
         <div className="form-group">
           <label htmlFor="name" className="form-label">
-            Name <span style={{ color: "#ef4444" }}>*</span>
+            Name (Use Abhinav Maity) <span style={{ color: "#ef4444" }}>*</span>
           </label>
           <input
             type="text"
@@ -137,13 +156,18 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
             value={userData.name}
             onChange={handleChange}
             className={`form-input ${errors.name ? "error" : ""}`}
-            placeholder="Enter your full name"
+            placeholder="Enter Name"
           />
           {errors.name && <div className="error-message">{errors.name}</div>}
         </div>
-        {errors.submit && (
+        {apiError && (
           <div className="error-message" style={{ marginBottom: "1rem" }}>
-            {errors.submit}
+            {apiError}
+          </div>
+        )}
+        {successMessage && (
+          <div className="success-message" style={{ marginBottom: "1rem" }}>
+            {successMessage}
           </div>
         )}
         <div
